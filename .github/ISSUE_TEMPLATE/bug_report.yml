@@ -1,0 +1,71 @@
+name: Bug 反馈
+description: 报告一个可复现的问题
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈！提交前请先搜索是否已有同类 Issue。
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 问题描述
+      description: 清楚地描述发生了什么。
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 请尽量给出具体的文件名示例与所填参数。
+      placeholder: |
+        1. 在「序号」页把格式设为 `#_[原文件名]`，位数设为 2
+        2. 添加文件 a.jpg、b.jpg
+        3. 点击「预览效果」
+        4. 看到……
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望结果
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际结果
+      description: 若有报错信息或截图，请一并贴出。
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: 版本
+      placeholder: 例如 v1.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: 操作系统
+      options:
+        - Windows
+        - macOS
+        - Linux
+    validations:
+      required: true
+
+  - type: input
+    id: python
+    attributes:
+      label: Python 版本
+      description: 若使用打包好的可执行文件，可填「不适用」。
+      placeholder: 例如 3.12.4

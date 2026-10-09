@@ -1,0 +1,12 @@
+# 默认按文本处理，仓库内统一使用 LF
+* text=auto eol=lf
+
+# 图像与二进制资源不做行尾转换
+*.png binary
+*.ico binary
+*.jpg binary
+*.ttf binary
+*.ttc binary
+
+# 截图在 diff 中折叠显示
+docs/screenshots/* linguist-documentation

@@ -1,0 +1,74 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "file-renaming-assistant"
+version = "1.0"
+description = "吃瓜批量改名器 —— 基于 PySide6 的跨平台批量文件重命名工具"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+keywords = ["rename", "renamer", "batch", "file", "pyside6", "qt", "改名", "批量重命名"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: X11 Applications :: Qt",
+    "Environment :: Win32 (MS Windows)",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Natural Language :: Chinese (Simplified)",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Utilities",
+]
+dependencies = ["PySide6>=6.5,<7"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "ruff>=0.4"]
+build = ["pyinstaller>=6"]
+
+[project.gui-scripts]
+file-renaming-assistant = "renamer.app:main"
+
+[project.urls]
+Homepage = "https://github.com/11113234376457548/File-Renaming-Assistant"
+Repository = "https://github.com/11113234376457548/File-Renaming-Assistant"
+Issues = "https://github.com/11113234376457548/File-Renaming-Assistant/issues"
+Changelog = "https://github.com/11113234376457548/File-Renaming-Assistant/blob/main/CHANGELOG.md"
+
+# ------------------------------------------------------------------ 打包
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+renamer = [
+    "resources/*.ico",
+    "resources/*.png",
+    "resources/icons/*.svg",
+    "resources/icons/LICENSE",
+]
+
+# ------------------------------------------------------------------ 测试
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+filterwarnings = ["ignore::DeprecationWarning"]
+
+# ------------------------------------------------------------------ 静态检查
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B"]
+ignore = ["N802"]          # Qt 的信号/事件方法名沿用驼峰，无法改成 snake_case

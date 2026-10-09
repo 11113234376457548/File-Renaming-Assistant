@@ -1,0 +1,47 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+*.manifest
+
+# ---- 虚拟环境 ----
+.venv/
+venv/
+env/
+ENV/
+
+# ---- 工具缓存 ----
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# ---- 打包产物 ----
+/File-Renaming-Assistant
+/File-Renaming-Assistant.exe
+
+# ---- 编辑器 / IDE ----
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# ---- 操作系统 ----
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- 图标抓取临时目录 ----
+.lucide/
+
+# ---- 本地资料（不进仓库）----
+# 工作记录目录：含本机绝对路径等只对本地有意义的内容
+.workbuddy/
+# 第三方闭源程序的反汇编分析，仅作本地存档
+docs/缺陷分析报告.md

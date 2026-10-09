@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 阅读使用说明
+    url: https://github.com/11113234376457548/File-Renaming-Assistant#规则说明
+    about: 提交 Issue 前，请先确认 README 中是否已有答案。

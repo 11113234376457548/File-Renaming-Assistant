@@ -1,0 +1,5 @@
+# 开发 / 打包依赖
+-r requirements.txt
+pytest>=7
+ruff>=0.4
+pyinstaller>=6
