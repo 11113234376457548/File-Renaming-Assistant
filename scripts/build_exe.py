@@ -21,6 +21,23 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SPEC = os.path.join(ROOT, "packaging", "File-Renaming-Assistant.spec")
 
 
+def force_utf8_stdio() -> None:
+    """把标准输出切到 UTF-8。
+
+    Windows 控制台默认是 cp936、GitHub Actions 的 runner 是 cp1252，
+    直接 ``print`` 中文会抛 ``UnicodeEncodeError`` 让整个脚本以非 0 退出
+    —— 哪怕 PyInstaller 已经把 exe 打好了（CI 上踩过这个坑）。
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        try:
+            reconfigure(encoding="utf-8", errors="replace")
+        except (ValueError, OSError):
+            pass
+
+
 def clean(*names: str) -> None:
     for name in names:
         path = os.path.join(ROOT, name)
@@ -30,6 +47,8 @@ def clean(*names: str) -> None:
 
 
 def main() -> int:
+    force_utf8_stdio()
+
     if not os.path.exists(SPEC):
         print(f"[error] 找不到 spec 文件：{SPEC}", file=sys.stderr)
         return 1
@@ -39,7 +58,9 @@ def main() -> int:
 
     cmd = [sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", SPEC]
     print("[build]", " ".join(cmd))
-    result = subprocess.run(cmd, cwd=ROOT)
+    # 子进程同样钉住 UTF-8，免得 PyInstaller 的中文告警又把父进程带崩
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+    result = subprocess.run(cmd, cwd=ROOT, env=env)
     if result.returncode != 0:
         return result.returncode
 

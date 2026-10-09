@@ -19,6 +19,22 @@ def _touch(path, content: str = "") -> str:
     return str(path)
 
 
+def _fs_is_case_insensitive(tmp_path) -> bool:
+    """探测当前文件系统是否不区分大小写（Windows / macOS 默认为真）。
+
+    引擎判定「目标是否已被占用」用的是 ``normcase(abspath(...))``，
+    在 Windows 上 ``b.txt`` 与 ``B.txt`` 会归一成同一个键，在 Linux 上
+    则是两个不同的文件——这是**平台语义**而非缺陷，所以相关用例要按
+    文件系统能力分平台断言，否则 CI 的 Linux 任务必然红。
+    """
+    probe = tmp_path / "CaseProbe.tmp"
+    probe.write_text("x", encoding="utf-8")
+    try:
+        return (tmp_path / "caseprobe.TMP").exists()
+    finally:
+        probe.unlink()
+
+
 # ------------------------------------------------------------------ B6 冲突检测
 
 class TestB6ConflictDetection:
@@ -63,12 +79,18 @@ class TestExistingTargetDetection:
         assert plan[0][3] == STATUS_TAKEN
 
     def test_target_taken_by_same_name_other_case(self, make_settings, tmp_path):
+        """不区分大小写的文件系统上，``b.txt`` 会被盘上的 ``B.txt`` 挡住。
+
+        Linux 区分大小写，两者是两个不同的文件，改名理应放行——所以
+        这里按文件系统能力分平台断言，而不是无脑认定必须冲突。
+        """
         fa = _touch(tmp_path / "a.txt", "a")
         _touch(tmp_path / "B.txt", "b")
         plan = plan_rename(
             [(fa, "a.txt", True)],
             RenameEngine(make_settings(tab=6, other_entry="b")))
-        assert plan[0][3] == STATUS_TAKEN
+        expected = STATUS_TAKEN if _fs_is_case_insensitive(tmp_path) else STATUS_RENAME
+        assert plan[0][3] == expected
 
     def test_swap_is_not_taken(self, make_settings, tmp_path):
         """交换名中目标虽已存在，但会被本批次让出来，不算冲突。"""
