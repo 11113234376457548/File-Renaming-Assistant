@@ -74,13 +74,41 @@ def test_check_latest_parses_release(monkeypatch):
 
 
 def test_check_latest_returns_none_when_no_release(monkeypatch):
-    """仓库还没发过 Release 时 GitHub 返回 404，这不是错误。"""
-    def raise_404(*_a, **_k):
-        raise urllib.error.HTTPError(update.API_LATEST, 404, "Not Found",
+    """仓库还在、只是没发过 Release 时，GitHub 对 latest 接口返回 404。
+
+    这不是错误，界面应该说「作者尚未发布任何正式版本」；
+    仓库接口要能正常返回，才说明仓库本身是存在的。
+    """
+    def dispatch(request, *a, **k):
+        url = request.full_url
+        if url == update.API_REPO:
+            return _FakeResponse(json.dumps({"full_name": update.GITHUB_REPO})
+                                 .encode("utf-8"))
+        raise urllib.error.HTTPError(url, 404, "Not Found", None, None)
+
+    monkeypatch.setattr(update.urllib.request, "urlopen", dispatch)
+    assert update.check_latest() is None
+
+
+def test_check_latest_reports_missing_repo(monkeypatch):
+    """仓库地址配错时不能伪装成「还没发过版本」，要明确报错。"""
+    def raise_404(request, *a, **k):
+        raise urllib.error.HTTPError(request.full_url, 404, "Not Found",
                                      None, None)
 
     monkeypatch.setattr(update.urllib.request, "urlopen", raise_404)
-    assert update.check_latest() is None
+    with pytest.raises(update.UpdateError) as info:
+        update.check_latest()
+    assert "仓库不存在" in str(info.value)
+
+
+def test_repo_probe_survives_network_error(monkeypatch):
+    """探仓库时断网，不能误报成「仓库不存在」。"""
+    def boom(*_a, **_k):
+        raise urllib.error.URLError("名字解析失败")
+
+    monkeypatch.setattr(update.urllib.request, "urlopen", boom)
+    assert update._repo_exists(8.0) is True
 
 
 def test_check_latest_wraps_network_error(monkeypatch):
@@ -108,4 +136,5 @@ def test_check_latest_wraps_server_error(monkeypatch):
 def test_urls_are_derived_from_repo_slug():
     """接口地址与发布页都要跟着 GITHUB_REPO 走，fork 后只改一处即可。"""
     assert update.GITHUB_REPO in update.API_LATEST
+    assert update.GITHUB_REPO in update.API_REPO
     assert update.GITHUB_REPO in update.RELEASES_PAGE

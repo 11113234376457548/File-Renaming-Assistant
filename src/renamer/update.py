@@ -17,6 +17,8 @@ import urllib.request
 from dataclasses import dataclass
 
 __all__ = [
+    "API_LATEST",
+    "API_REPO",
     "GITHUB_REPO",
     "RELEASES_PAGE",
     "Release",
@@ -31,6 +33,8 @@ __all__ = [
 GITHUB_REPO = "11113234376457548/File-Renaming-Assistant"
 #: GitHub 的「最新正式发布」接口
 API_LATEST = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+#: 仓库信息接口。只用于区分 404 的两种含义：仓库不存在 / 仓库没发过版本
+API_REPO = f"https://api.github.com/repos/{GITHUB_REPO}"
 #: 兜底跳转地址（接口拿不到链接时用）
 RELEASES_PAGE = f"https://github.com/{GITHUB_REPO}/releases"
 
@@ -78,24 +82,52 @@ def is_newer(latest: str, current: str) -> bool:
     return parse_version(latest) > parse_version(current)
 
 
+def _request(url: str, timeout: float) -> urllib.request.Request:
+    return urllib.request.Request(
+        url,
+        headers={"User-Agent": _USER_AGENT,
+                 "Accept": "application/vnd.github+json"},
+    )
+
+
+def _fetch_json(url: str, timeout: float) -> dict:
+    with urllib.request.urlopen(_request(url, timeout), timeout=timeout) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def _repo_exists(timeout: float) -> bool:
+    """仓库是否真实存在。
+
+    ``/releases/latest`` 在「仓库不存在」和「仓库没发过 Release」两种情况下
+    都返回 404，光看状态码分不出来。多问一句仓库接口就能拆开，
+    否则配置错仓库地址时会一直显示成「作者尚未发布任何正式版本」，
+    把配置问题伪装成正常状态，很难查。
+    """
+    try:
+        _fetch_json(API_REPO, timeout)
+    except urllib.error.HTTPError as exc:
+        return exc.code != 404
+    except (urllib.error.URLError, OSError, ValueError):
+        # 网络抖动时宁可当成「仓库在」，避免把网络问题误报成地址错误
+        return True
+    return True
+
+
 def check_latest(timeout: float = TIMEOUT) -> Release | None:
     """查询最新一次正式发布。
 
     :returns: :class:`Release`；仓库尚无任何发布时返回 ``None``。
     :raises UpdateError: 网络不可达、仓库不存在或响应无法解析。
     """
-    request = urllib.request.Request(
-        API_LATEST,
-        headers={"User-Agent": _USER_AGENT,
-                 "Accept": "application/vnd.github+json"},
-    )
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as resp:
-            payload = json.loads(resp.read().decode("utf-8"))
+        payload = _fetch_json(API_LATEST, timeout)
     except urllib.error.HTTPError as exc:
         if exc.code == 404:
-            # 404 有两种可能：仓库不存在，或仓库还没发过 Release
-            return None
+            if _repo_exists(timeout):
+                return None          # 仓库在，只是还没发过正式版本
+            raise UpdateError(
+                f"仓库不存在：{GITHUB_REPO}（请检查 update.py 里的 GITHUB_REPO）"
+            ) from exc
         raise UpdateError(f"更新服务器返回 HTTP {exc.code}") from exc
     except (urllib.error.URLError, OSError, ValueError) as exc:
         raise UpdateError(f"无法连接更新服务器（{exc}）") from exc
