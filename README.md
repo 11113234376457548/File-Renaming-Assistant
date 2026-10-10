@@ -3,7 +3,7 @@
 <p align="center"><img src="src/renamer/resources/app_icon.png" width="110" alt="应用图标"></p>
 
 ![CI](../../actions/workflows/ci.yml/badge.svg)
-![Version](https://img.shields.io/badge/version-2.0-blue.svg)
+![Version](https://img.shields.io/badge/version-2.1-blue.svg)
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)
 ![PySide6](https://img.shields.io/badge/PySide6-6.x-41cd52.svg)
@@ -43,8 +43,8 @@
 - **6 套内置皮肤**：经典浅色、护眼绿、暖沙、经典深色、暗夜蓝、高对比。
   在「视图 → 皮肤」里一键切换，`Ctrl+D` 可在经典浅色 / 经典深色之间快速来回；
   选择会被记住，下次启动沿用。弹窗在深色系统下也不再「黑底黑字」。
-- **检查更新**：「帮助 → 检查更新」联网比对 GitHub 上的最新版本，有新版本时
-  直接跳转下载页。
+- **一键更新**：「帮助 → 检查更新」联网比对 GitHub 上的最新版本；发现新版可以
+  直接在程序内下载、校验并完成替换，更新完自动重启。也可以选择打开下载页手动更新。
 - **纯逻辑内核**：改名引擎零 GUI 依赖，可单独导入进你自己的脚本。
 - **跨平台**：Windows、macOS、Linux 均可运行与打包。
 - **标准开源图标**：界面图标全部取自 [Lucide](https://lucide.dev)（ISC 协议），
@@ -252,7 +252,7 @@ python scripts/build_exe.py
 > 脚本会先清理 `build/` 与 `dist/`。这一步是必须的——PyInstaller 命中缓存时会
 > 「只花 2 秒就 Build complete」，但产物其实是旧内容。
 
-推送形如 `v2.0` 的 tag 后，[Release 工作流](.github/workflows/release.yml)
+推送形如 `v2.1` 的 tag 后，[Release 工作流](.github/workflows/release.yml)
 会自动在 Windows 上打包并把可执行文件发布到 Release 页。
 
 ---
@@ -267,13 +267,14 @@ python scripts/build_exe.py
 │   ├── core.py                     # 改名引擎（纯逻辑，零 Qt 依赖）
 │   ├── icons.py                    # Lucide 图标：着色、渲染、QSS 位图缓存
 │   ├── update.py                   # 检查更新（纯标准库，可单独测试）
+│   ├── selfupdate.py               # 就地更新：下载、SHA256 校验、退出后替换
 │   ├── theme.py                    # 配色与样式表
 │   ├── paths.py                    # 资源定位（源码 / 打包兼容）
 │   ├── resources/                  # 应用图标 + icons/（Lucide SVG 源文件）
 │   └── ui/
 │       ├── main_window.py          # 主窗口
 │       └── tab_selector.py         # 左侧彩色标签选择器
-├── tests/                          # pytest 测试（176 项）
+├── tests/                          # pytest 测试（302 项）
 ├── scripts/
 │   ├── build_exe.py                # 一键打包
 │   ├── make_app_icon.py            # 由源图生成应用图标（PNG / ICO）
@@ -305,7 +306,7 @@ undo(history)                 # 一键还原
 ```bash
 pip install -r requirements-dev.txt
 
-python -m pytest -q            # 运行 176 项测试
+python -m pytest -q            # 运行 302 项测试
 ruff check .                   # 静态检查
 python scripts/screenshot.py   # 重新生成文档截图
 python scripts/make_app_icon.py  # 由源图重新生成应用图标

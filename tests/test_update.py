@@ -138,3 +138,71 @@ def test_urls_are_derived_from_repo_slug():
     assert update.GITHUB_REPO in update.API_LATEST
     assert update.GITHUB_REPO in update.API_REPO
     assert update.GITHUB_REPO in update.RELEASES_PAGE
+
+
+# ------------------------------------------------------------------ 附件
+
+def _release_with_assets(assets: list[dict]) -> update.Release:
+    payload = json.loads(_payload("v9.9.9"))
+    payload["assets"] = assets
+    return update._release_from_payload(payload)
+
+
+def test_assets_are_parsed_with_digest():
+    """GitHub 会给发布附件带 ``digest: sha256:...``，界面靠它决定能否自动更新。"""
+    release = _release_with_assets([{
+        "name": "File-Renaming-Assistant.exe",
+        "browser_download_url": "https://example.com/a.exe",
+        "url": "https://api.example.com/assets/1",
+        "size": 1234,
+        "digest": "sha256:AABBCC",
+    }])
+    assert len(release.assets) == 1
+    asset = release.assets[0]
+    assert asset.size == 1234
+    assert asset.api_url == "https://api.example.com/assets/1"
+    assert asset.sha256 == "aabbcc", "摘要要归一成小写裸十六进制"
+
+
+def test_asset_lookup_ignores_case_and_missing_name():
+    release = _release_with_assets([{
+        "name": "File-Renaming-Assistant.exe",
+        "browser_download_url": "https://example.com/a.exe",
+        "url": "",
+        "size": 1,
+        "digest": "sha256:aa",
+    }])
+    assert release.asset("file-renaming-assistant.EXE") is not None
+    assert release.asset("nope.exe") is None
+
+
+def test_asset_sha256_only_accepts_sha256_digest():
+    """摘要算法不是 sha256 时要当作「没有摘要」，不能拿去比对。"""
+    release = _release_with_assets([{
+        "name": "a.exe",
+        "browser_download_url": "https://example.com/a.exe",
+        "url": "",
+        "size": 1,
+        "digest": "md5:whatever",
+    }])
+    assert release.assets[0].sha256 == ""
+
+
+@pytest.mark.parametrize("assets", [None, "not-a-list", [None, 42], [{}]])
+def test_broken_assets_block_does_not_crash(assets):
+    """``assets`` 字段缺失或结构异常时，只是没有附件，不该让解析炸掉。"""
+    payload = json.loads(_payload())
+    payload["assets"] = assets
+    release = update._release_from_payload(payload)
+    assert release.assets == ()
+    assert release.version == "v9.9.9"
+
+
+def test_asset_without_url_is_dropped():
+    """没有下载地址的条目留着也没用，直接丢掉，免得后面拿到空链接。"""
+    release = _release_with_assets([
+        {"name": "a.exe", "browser_download_url": "", "size": 1, "digest": "sha256:aa"},
+        {"name": "b.exe", "browser_download_url": "https://example.com/b.exe",
+         "size": 1, "digest": "sha256:bb"},
+    ])
+    assert [a.name for a in release.assets] == ["b.exe"]

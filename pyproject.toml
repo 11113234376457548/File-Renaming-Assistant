@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "file-renaming-assistant"
-version = "2.0"
+version = "2.1"
 description = "吃瓜批量改名器 —— 基于 PySide6 的跨平台批量文件重命名工具"
 readme = "README.md"
 requires-python = ">=3.10"

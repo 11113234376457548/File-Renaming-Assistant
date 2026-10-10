@@ -1,7 +1,7 @@
 # File Renaming Assistant
 
 ![CI](../../actions/workflows/ci.yml/badge.svg)
-![Version](https://img.shields.io/badge/version-2.0-blue.svg)
+![Version](https://img.shields.io/badge/version-2.1-blue.svg)
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)
 ![PySide6](https://img.shields.io/badge/PySide6-6.x-41cd52.svg)
@@ -32,9 +32,10 @@
   Midnight Blue and High Contrast. Switch from *View → Skin*; `Ctrl+D` still flips
   between Classic Light and Classic Dark. Your choice is remembered across runs,
   and dialogs no longer go dark-on-dark under a dark system theme.
-- **Check for updates** — *Help → Check for updates* compares your version with
-  the latest GitHub release in a background thread and links straight to the
-  download page.
+- **One-click update** — *Help → Check for updates* compares your version with the
+  latest GitHub release in a background thread. When a newer build is available it
+  can download, verify and install it in place, then restart itself; you can also
+  open the release page and update by hand.
 - **Headless-testable core** — the engine has zero GUI dependencies.
 - **Standard open-source icons** — every UI icon comes from
   [Lucide](https://lucide.dev) (ISC). The SVGs ship with the package and are
@@ -94,7 +95,7 @@ pip install -r requirements-dev.txt
 python scripts/build_exe.py     # -> dist/File-Renaming-Assistant.exe
 ```
 
-Pushing a tag such as `v2.0` triggers
+Pushing a tag such as `v2.1` triggers
 [`.github/workflows/release.yml`](.github/workflows/release.yml), which builds
 the Windows executable and publishes it to the Release page.
 

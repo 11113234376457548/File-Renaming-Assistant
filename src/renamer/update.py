@@ -21,6 +21,7 @@ __all__ = [
     "API_REPO",
     "GITHUB_REPO",
     "RELEASES_PAGE",
+    "Asset",
     "Release",
     "UpdateError",
     "check_latest",
@@ -51,6 +52,23 @@ class UpdateError(Exception):
 
 
 @dataclass(frozen=True)
+class Asset:
+    """发布里的一个附件（可执行文件、校验文件……）。"""
+
+    name: str        #: 文件名，如 ``File-Renaming-Assistant.exe``
+    url: str         #: 浏览器下载地址（``github.com`` 上的直链）
+    api_url: str     #: 接口地址；带 ``Accept: application/octet-stream`` 也能下
+    size: int        #: 字节数；未知为 0
+    digest: str      #: ``sha256:<hex>``；上游没给时为空串
+
+    @property
+    def sha256(self) -> str:
+        """从 ``digest`` 里取出裸的十六进制摘要；没有则返回空串。"""
+        prefix, _, value = self.digest.partition(":")
+        return value.strip().lower() if prefix.strip().lower() == "sha256" else ""
+
+
+@dataclass(frozen=True)
 class Release:
     """一条发布信息。"""
 
@@ -58,6 +76,15 @@ class Release:
     url: str              #: 发布页地址
     name: str             #: 发布标题
     notes: str            #: 发布说明（Markdown 原文）
+    assets: tuple[Asset, ...] = ()   #: 附件列表，可能为空
+
+    def asset(self, name: str) -> Asset | None:
+        """按文件名取附件（不区分大小写）。"""
+        wanted = name.lower()
+        for item in self.assets:
+            if item.name.lower() == wanted:
+                return item
+        return None
 
 
 def parse_version(text: str) -> tuple[int, int, int]:
@@ -113,6 +140,51 @@ def _repo_exists(timeout: float) -> bool:
     return True
 
 
+def _parse_assets(payload: dict) -> tuple[Asset, ...]:
+    """把接口返回的 ``assets`` 数组解析成 :class:`Asset`。
+
+    ``digest`` 字段是 GitHub 在 2025 年给发布附件补上的 ``sha256:<hex>``，
+    老响应里没有，此时留空、由调用方决定是否还有别的校验手段。
+    """
+    raw = payload.get("assets")
+    if not isinstance(raw, list):
+        return ()
+    assets: list[Asset] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "").strip()
+        url = str(item.get("browser_download_url") or "").strip()
+        if not name or not url:
+            continue
+        try:
+            size = int(item.get("size") or 0)
+        except (TypeError, ValueError):
+            size = 0
+        assets.append(Asset(
+            name=name,
+            url=url,
+            api_url=str(item.get("url") or "").strip(),
+            size=max(size, 0),
+            digest=str(item.get("digest") or "").strip(),
+        ))
+    return tuple(assets)
+
+
+def _release_from_payload(payload: dict) -> Release | None:
+    """把接口返回的 JSON 对象翻译成 :class:`Release`；没有标签时返回 ``None``。"""
+    tag = str(payload.get("tag_name") or "").strip()
+    if not tag:
+        return None
+    return Release(
+        version=tag,
+        url=str(payload.get("html_url") or RELEASES_PAGE),
+        name=str(payload.get("name") or tag),
+        notes=str(payload.get("body") or ""),
+        assets=_parse_assets(payload),
+    )
+
+
 def check_latest(timeout: float = TIMEOUT) -> Release | None:
     """查询最新一次正式发布。
 
@@ -132,12 +204,4 @@ def check_latest(timeout: float = TIMEOUT) -> Release | None:
     except (urllib.error.URLError, OSError, ValueError) as exc:
         raise UpdateError(f"无法连接更新服务器（{exc}）") from exc
 
-    tag = str(payload.get("tag_name") or "").strip()
-    if not tag:
-        return None
-    return Release(
-        version=tag,
-        url=str(payload.get("html_url") or RELEASES_PAGE),
-        name=str(payload.get("name") or tag),
-        notes=str(payload.get("body") or ""),
-    )
+    return _release_from_payload(payload)

@@ -8,9 +8,10 @@
 from __future__ import annotations
 
 import os
+import threading
 from functools import partial
 
-from PySide6.QtCore import QSize, Qt, QThread, QUrl, Signal
+from PySide6.QtCore import QSize, Qt, QThread, QTimer, QUrl, Signal
 from PySide6.QtGui import (
     QAction,
     QActionGroup,
@@ -35,6 +36,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMenu,
     QMessageBox,
+    QProgressDialog,
     QPushButton,
     QSizePolicy,
     QSpacerItem,
@@ -79,6 +81,14 @@ from ..icons import (
     theme_icon_dir,
 )
 from ..paths import resource_path
+from ..selfupdate import (
+    DownloadCancelled,
+    Staged,
+    pick_asset,
+    spawn_apply,
+    stage,
+    supports_self_update,
+)
 from ..settings import get_skin, set_skin
 from ..theme import TAB_COLORS, Theme, build_qss
 from ..update import RELEASES_PAGE, Release, UpdateError, check_latest, is_newer
@@ -182,6 +192,15 @@ def _message_box(parent, icon, title: str, text: str,
     box.setText(text)
     box.setStandardButtons(buttons)
 
+    # Qt 自带的按钮文案是英文（Yes / No / OK），在一水儿中文的界面里很扎眼。
+    # 项目没有引入 .qm 翻译文件，直接给标准按钮改文字最省事，也不会漏掉
+    # 某个弹窗 —— 所有消息框都必须经过这里。
+    for name, label in (("Ok", "确定"), ("Yes", "是"), ("No", "否"),
+                        ("Cancel", "取消"), ("Close", "关闭")):
+        handle = box.button(getattr(QMessageBox.StandardButton, name))
+        if handle is not None:
+            handle.setText(label)
+
     # QMessageBox 内部是 QGridLayout：新开一行、横跨所有列放弹簧
     layout = box.layout()
     spacer = QSpacerItem(DIALOG_MIN_WIDTH, 0,
@@ -209,6 +228,28 @@ def _ask(parent, title: str, text: str) -> bool:
     return box.exec() == QMessageBox.StandardButton.Yes
 
 
+def _choose(parent, title: str, text: str, options: list[tuple[str, object]]) -> int:
+    """多选一的对话框。
+
+    ``options`` 是 ``(按钮文案, 按钮角色)`` 列表；返回被点按钮的下标，
+    用户直接关掉窗口则返回 ``-1``。
+
+    按钮文案自己写而不是用标准按钮：一是标准按钮只有「是 / 否」两档，
+    二是「立即更新 / 打开下载页 / 以后再说」这种措辞比「是 / 否」清楚得多。
+    """
+    box = _message_box(parent, QMessageBox.Icon.Question, title, text,
+                       QMessageBox.StandardButton.NoButton)
+    buttons = [box.addButton(label, role) for label, role in options]
+    box.setDefaultButton(buttons[0])
+    box.exec()
+
+    clicked = box.clickedButton()
+    for index, handle in enumerate(buttons):
+        if handle is clicked:
+            return index
+    return -1
+
+
 class _UpdateWorker(QThread):
     """在后台线程里查询最新版本。
 
@@ -228,6 +269,45 @@ class _UpdateWorker(QThread):
             self.finished_check.emit(None, f"未知错误：{exc}")
         else:
             self.finished_check.emit(release, "")
+
+
+class _DownloadWorker(QThread):
+    """在后台线程里下载并校验新版本。
+
+    产物有 45 MB 上下，慢网络下要几十秒；放在主线程里连进度条本身都会卡住。
+    """
+
+    #: ``(已下载字节, 总字节)``；总字节未知时为 0
+    progressed = Signal(int, int)
+    #: ``(Staged | None, 错误文本)`` —— 二者必有一个为空
+    finished_download = Signal(object, str)
+    #: 用户取消，不算失败
+    cancelled = Signal()
+
+    def __init__(self, release: Release, parent=None) -> None:
+        super().__init__(parent)
+        self._release = release
+        self._stop = threading.Event()
+
+    def cancel(self) -> None:
+        """请下载线程停下；下一个分块处生效。"""
+        self._stop.set()
+
+    def run(self) -> None:  # noqa: D102 (Qt 虚函数)
+        try:
+            staged = stage(
+                self._release,
+                progress=lambda done, total: self.progressed.emit(done, total),
+                cancel=self._stop.is_set,
+            )
+        except DownloadCancelled:
+            self.cancelled.emit()
+        except UpdateError as exc:
+            self.finished_download.emit(None, str(exc))
+        except Exception as exc:                     # noqa: BLE001 兜底
+            self.finished_download.emit(None, f"未知错误：{exc}")
+        else:
+            self.finished_download.emit(staged, "")
 
 
 class MainWindow(QMainWindow):
@@ -250,6 +330,9 @@ class MainWindow(QMainWindow):
         self._skin_menu: QMenu | None = None
         # 检查更新的后台线程；持有引用，避免线程跑着跑着被回收
         self._update_worker: _UpdateWorker | None = None
+        # 下载新版的线程与进度框；同样得留住引用
+        self._download_worker: _DownloadWorker | None = None
+        self._download_dialog: QProgressDialog | None = None
         # 行拖动开始时的顺序快照；拖动中按 ESC 取消时用它还原
         self._drag_snapshot: list[list] | None = None
 
@@ -1332,10 +1415,146 @@ class MainWindow(QMainWindow):
             return
 
         self._set_status(f"发现新版本 {release.version}")
-        if _ask(self, "发现新版本",
-                f"发现新版本 {release.version}（当前 v{__version__}）。\n\n"
-                "是否打开下载页面？"):
+
+        # 能不能在本程序内更新，取决于三件事：是不是打包运行、这个平台有没有
+        # 对应的附件、以及附件有没有带 SHA256 摘要。任何一条不满足就老老实实
+        # 退回「打开下载页」—— 理由要讲清楚，别让用户以为功能坏了。
+        reason = self._self_update_blocker(release)
+        if reason:
+            if _ask(self, "发现新版本",
+                    f"发现新版本 {release.version}（当前 v{__version__}）。\n\n"
+                    f"{reason}\n是否打开下载页面？"):
+                QDesktopServices.openUrl(QUrl(release.url))
+            return
+
+        choice = _choose(
+            self, "发现新版本",
+            f"发现新版本 {release.version}（当前 v{__version__}）。\n\n"
+            "可以直接在程序内下载并校验，完成后自动重启完成更新。",
+            [("立即更新", QMessageBox.ButtonRole.AcceptRole),
+             ("打开下载页", QMessageBox.ButtonRole.ActionRole),
+             ("以后再说", QMessageBox.ButtonRole.RejectRole)])
+        if choice == 0:
+            self._start_self_update(release)
+        elif choice == 1:
             QDesktopServices.openUrl(QUrl(release.url))
+        else:
+            self._set_status(f"有新版本 {release.version}（本次未更新）")
+
+    @staticmethod
+    def _self_update_blocker(release: Release) -> str:
+        """返回「不能自动更新」的原因；可以自动更新时返回空串。"""
+        if not supports_self_update():
+            return "当前是以源码方式运行的，无法替换自身。"
+        try:
+            pick_asset(release)
+        except UpdateError as exc:
+            return str(exc)
+        return ""
+
+    # ------------------------------------------------------------ 就地更新
+
+    def _start_self_update(self, release: Release) -> None:
+        """下载新版本并校验，全程带一个可以取消的进度条。"""
+        if self._download_worker is not None and self._download_worker.isRunning():
+            self._set_status("正在下载更新…（请稍候）")
+            return
+
+        dialog = QProgressDialog("正在下载新版本…", "取消", 0, 0, self)
+        dialog.setWindowTitle("下载更新")
+        dialog.setWindowModality(Qt.WindowModality.WindowModal)
+        dialog.setMinimumWidth(DIALOG_MIN_WIDTH)
+        dialog.setAutoClose(False)
+        dialog.setAutoReset(False)
+
+        worker = _DownloadWorker(release, self)
+        self._download_worker = worker
+        self._download_dialog = dialog
+
+        worker.progressed.connect(self._on_download_progress)
+        worker.finished_download.connect(partial(self._on_download_done, dialog))
+        worker.cancelled.connect(partial(self._on_download_cancelled, dialog))
+        dialog.canceled.connect(worker.cancel)
+
+        dialog.show()
+        worker.start()
+        self._set_status(f"正在下载 {release.version}…")
+
+    def _on_download_progress(self, done: int, total: int) -> None:
+        dialog = self._download_dialog
+        if dialog is None:
+            return
+        if total > 0 and dialog.maximum() != total:
+            dialog.setRange(0, total)
+        if total > 0:
+            dialog.setValue(done)
+        downloaded = f"{done / 1024 / 1024:.1f} MB"
+        if total > 0:
+            downloaded += f" / {total / 1024 / 1024:.1f} MB"
+        dialog.setLabelText(f"正在下载新版本… {downloaded}")
+
+    def _close_download_dialog(self, dialog: QProgressDialog) -> None:
+        dialog.close()
+        if self._download_dialog is dialog:
+            self._download_dialog = None
+
+    def _on_download_cancelled(self, dialog: QProgressDialog) -> None:
+        self._close_download_dialog(dialog)
+        self._set_status("已取消更新下载")
+
+    def _on_download_done(self, dialog: QProgressDialog, staged: Staged | None,
+                          error: str) -> None:
+        self._close_download_dialog(dialog)
+
+        if error:
+            self._set_status("更新下载失败")
+            _warn(self, "更新失败",
+                  f"{error}\n\n也可以到发布页手动下载：\n{RELEASES_PAGE}")
+            return
+        if staged is None:                       # 理论上不会走到，兜底
+            return
+
+        self._set_status(f"已下载 {staged.version}")
+        choice = _choose(
+            self, "更新已就绪",
+            f"{staged.version} 已经下载并校验通过。\n\n"
+            "更新需要关闭当前程序来完成替换，随后会重新打开。",
+            [("立即重启并更新", QMessageBox.ButtonRole.AcceptRole),
+             ("取消", QMessageBox.ButtonRole.RejectRole)])
+        if choice != 0:
+            self._discard_staged(staged)
+            return
+        self._apply_and_restart(staged)
+
+    @staticmethod
+    def _discard_staged(staged: Staged) -> None:
+        """放弃这次更新，把已下载的文件删掉。
+
+        留着它只会变成一个「看着更新过了、其实没有」的陷阱：没有任何代码
+        会在下次启动时去应用它。
+        """
+        try:
+            os.unlink(staged.path)
+        except OSError:
+            pass
+
+    def _apply_and_restart(self, staged: Staged) -> None:
+        """启动更新助手并退出，把替换文件的活交给它。"""
+        try:
+            spawn_apply(staged)
+        except OSError as exc:
+            self._set_status("无法启动更新助手")
+            _warn(self, "更新失败",
+                  f"无法启动更新助手：{exc}\n\n请到发布页手动下载：\n{RELEASES_PAGE}")
+            return
+
+        self._set_status("正在重启以完成更新…")
+        app = QApplication.instance()
+        if app is None:
+            return
+        # 用 singleShot 而不是直接 quit()：此刻还嵌在弹窗的事件循环里，
+        # 直接退出的可能是那一层循环，主循环反而留着。
+        QTimer.singleShot(0, app.quit)
 
     # ------------------------------------------------------------ 拖放
 
