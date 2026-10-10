@@ -404,7 +404,16 @@ def test_apply_update_cross_volume_cleans_up_on_failure(monkeypatch, tmp_path,
 
 
 def test_same_volume_detection(tmp_path):
+    """同一目录下的两个文件当然同卷。"""
     assert su._same_volume(str(tmp_path / "a"), str(tmp_path / "b")) is True
+
+
+@pytest.mark.skipif(
+    os.name != "nt",
+    reason="盘符只有 Windows 才有意义：POSIX 上 os.path.splitdrive 恒返回空串，"
+           "拿 'C:\\…' 与 'F:\\…' 去比会得到「同卷」，这个断言在那里没有意义",
+)
+def test_same_volume_detects_different_drives():
     assert su._same_volume(r"C:\a\b", r"F:\c\d") is False
 
 
