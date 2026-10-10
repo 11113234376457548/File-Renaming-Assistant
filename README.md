@@ -3,7 +3,7 @@
 <p align="center"><img src="src/renamer/resources/app_icon.png" width="110" alt="应用图标"></p>
 
 ![CI](../../actions/workflows/ci.yml/badge.svg)
-![Version](https://img.shields.io/badge/version-1.0-blue.svg)
+![Version](https://img.shields.io/badge/version-2.0-blue.svg)
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)
 ![PySide6](https://img.shields.io/badge/PySide6-6.x-41cd52.svg)
@@ -40,13 +40,15 @@
 - **可撤销**：执行后一键还原，采用两阶段提交，连 `A↔B` 这种交换名也能安全撤销。
 - **拖拽即用**：支持拖入文件、拖入文件夹、拖入多个路径。
 - **自然排序**：`img2` 排在 `img10` 之前，而不是按字典序乱序。
-- **深色 / 浅色主题**：`Ctrl+D` 一键切换，弹窗在深色系统下不再「黑底黑字」。
+- **6 套内置皮肤**：经典浅色、护眼绿、暖沙、经典深色、暗夜蓝、高对比。
+  在「视图 → 皮肤」里一键切换，`Ctrl+D` 可在经典浅色 / 经典深色之间快速来回；
+  选择会被记住，下次启动沿用。弹窗在深色系统下也不再「黑底黑字」。
 - **检查更新**：「帮助 → 检查更新」联网比对 GitHub 上的最新版本，有新版本时
   直接跳转下载页。
 - **纯逻辑内核**：改名引擎零 GUI 依赖，可单独导入进你自己的脚本。
 - **跨平台**：Windows、macOS、Linux 均可运行与打包。
 - **标准开源图标**：界面图标全部取自 [Lucide](https://lucide.dev)（ISC 协议），
-  以 SVG 源码随包分发、**运行时按当前主题着色**，明暗两套主题共用同一份矢量，
+  以 SVG 源码随包分发、**运行时按当前主题着色**，全部皮肤共用同一份矢量，
   任意缩放都清晰。应用图标则沿用原版《吃瓜批量改名器》的素材，授权说明见
   [许可证](#许可证)。
 
@@ -69,6 +71,16 @@
 深色主题下同样清晰：
 
 ![深色主题](docs/screenshots/dark/01-序号.png)
+
+内置 6 套皮肤，在「视图 → 皮肤」里切换：
+
+| 经典浅色 | 护眼绿 | 暖沙 |
+|:---:|:---:|:---:|
+| ![经典浅色](docs/screenshots/skins/light.png) | ![护眼绿](docs/screenshots/skins/eye.png) | ![暖沙](docs/screenshots/skins/sand.png) |
+
+| 经典深色 | 暗夜蓝 | 高对比 |
+|:---:|:---:|:---:|
+| ![经典深色](docs/screenshots/skins/dark.png) | ![暗夜蓝](docs/screenshots/skins/midnight.png) | ![高对比](docs/screenshots/skins/contrast.png) |
 
 ---
 
@@ -240,7 +252,7 @@ python scripts/build_exe.py
 > 脚本会先清理 `build/` 与 `dist/`。这一步是必须的——PyInstaller 命中缓存时会
 > 「只花 2 秒就 Build complete」，但产物其实是旧内容。
 
-推送形如 `v1.0` 的 tag 后，[Release 工作流](.github/workflows/release.yml)
+推送形如 `v2.0` 的 tag 后，[Release 工作流](.github/workflows/release.yml)
 会自动在 Windows 上打包并把可执行文件发布到 Release 页。
 
 ---

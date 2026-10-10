@@ -46,6 +46,7 @@ __all__ = [
     "ICON_CLEAR",
     "ICON_EXECUTE",
     "ICON_MORE",
+    "ICON_PALETTE",
     "ICON_PREVIEW",
     "ICON_REFRESH",
     "ICON_THEME",
@@ -69,6 +70,7 @@ ICON_PREVIEW = "eye"
 ICON_EXECUTE = "circle-check"
 ICON_UNDO = "undo-2"
 ICON_THEME = "sun-moon"
+ICON_PALETTE = "palette"
 ICON_ABOUT = "info"
 ICON_UPDATE = "cloud-download"
 ICON_CHECK_ALL = "square-check"

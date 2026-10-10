@@ -24,7 +24,7 @@ REFERENCED = [
     icons.ICON_CLEAR, icons.ICON_PREVIEW, icons.ICON_EXECUTE,
     icons.ICON_UNDO, icons.ICON_THEME, icons.ICON_ABOUT, icons.ICON_UPDATE,
     icons.ICON_CHECK_ALL, icons.ICON_UNCHECK_ALL, icons.ICON_MORE,
-    icons.ICON_APP,
+    icons.ICON_APP, icons.ICON_PALETTE,
     # QSS 位图用到的字形
     "plus", "minus", "chevron-down", "check", "square",
 ]
@@ -81,6 +81,22 @@ def test_light_and_dark_bitmaps_differ(app):
         a = open(os.path.join(light, f"{name}.png"), "rb").read()
         b = open(os.path.join(dark, f"{name}.png"), "rb").read()
         assert a != b
+
+
+def test_every_skin_gets_its_own_icon_cache(app):
+    """每套皮肤都要落到**不同**的缓存目录。
+
+    缓存目录名是配色字典的摘要，这件事一旦坏掉，表现是「切了皮肤但图标还是
+    上一套的颜色」——而且因为位图已经写好了，重启也不会自愈。
+    """
+    from renamer.theme import Theme
+
+    dirs = {key: icons.theme_icon_dir(key) for key in Theme.keys()}
+    assert len(set(dirs.values())) == len(dirs)
+    for key, out in dirs.items():
+        for name in ("spin_plus", "spin_minus", "dropdown_arrow",
+                     "chk_checked", "chk_unchecked"):
+            assert os.path.exists(os.path.join(out, f"{name}.png")), (key, name)
 
 
 def test_checked_box_uses_accent_colour(app):

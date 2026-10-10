@@ -9,6 +9,7 @@ from PySide6.QtWidgets import QApplication
 
 from . import __app_name__, __app_name_en__, __version__
 from .paths import resource_path
+from .settings import get_skin
 from .ui.main_window import MainWindow, fix_palette
 
 __all__ = ["main"]
@@ -26,8 +27,10 @@ def main(argv: list[str] | None = None) -> int:
     if not icon.isNull():
         app.setWindowIcon(icon)
 
-    # 必须在建窗口之前钉住调色板，否则深色系统下弹窗可能黑底黑字
-    fix_palette(app, "light")
+    # 必须在建窗口之前钉住调色板，否则深色系统下弹窗可能黑底黑字。
+    # 这里要按**上次保存的皮肤**来钉 —— 固定用 "light" 会让深色皮肤
+    # 在启动的一瞬间闪一下白底。
+    fix_palette(app, get_skin())
 
     window = MainWindow()
     window.show()

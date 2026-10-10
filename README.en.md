@@ -1,7 +1,7 @@
 # File Renaming Assistant
 
 ![CI](../../actions/workflows/ci.yml/badge.svg)
-![Version](https://img.shields.io/badge/version-1.0-blue.svg)
+![Version](https://img.shields.io/badge/version-2.0-blue.svg)
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)
 ![PySide6](https://img.shields.io/badge/PySide6-6.x-41cd52.svg)
@@ -28,14 +28,17 @@
 - **Undo** — built on two-phase commits, so even name swaps (`A↔B`) roll back safely.
 - **Drag & drop** — drop files, folders, or a mixed selection.
 - **Natural sort** — `img2` comes before `img10`.
-- **Dark / light theme** — toggle with `Ctrl+D`.
+- **Six built-in skins** — Classic Light, Eye-care Green, Warm Sand, Classic Dark,
+  Midnight Blue and High Contrast. Switch from *View → Skin*; `Ctrl+D` still flips
+  between Classic Light and Classic Dark. Your choice is remembered across runs,
+  and dialogs no longer go dark-on-dark under a dark system theme.
 - **Check for updates** — *Help → Check for updates* compares your version with
   the latest GitHub release in a background thread and links straight to the
   download page.
 - **Headless-testable core** — the engine has zero GUI dependencies.
 - **Standard open-source icons** — every UI icon comes from
   [Lucide](https://lucide.dev) (ISC). The SVGs ship with the package and are
-  recoloured to the active theme at runtime, so light and dark share one set of
+  recoloured to the active theme at runtime, so every skin shares one set of
   vectors. The application icon is carried over from the original
   *吃瓜批量改名器* and is **not** covered by this project's MIT licence —
   see the licence note in [README.md](README.md) before redistributing.
@@ -45,6 +48,16 @@
 | Numbering | Add | Delete |
 |:---:|:---:|:---:|
 | ![Numbering](docs/screenshots/01-序号.png) | ![Add](docs/screenshots/02-添加.png) | ![Delete](docs/screenshots/03-删除.png) |
+
+Six built-in skins, switchable from *View → Skin*:
+
+| Classic Light | Eye-care Green | Warm Sand |
+|:---:|:---:|:---:|
+| ![Classic Light](docs/screenshots/skins/light.png) | ![Eye-care Green](docs/screenshots/skins/eye.png) | ![Warm Sand](docs/screenshots/skins/sand.png) |
+
+| Classic Dark | Midnight Blue | High Contrast |
+|:---:|:---:|:---:|
+| ![Classic Dark](docs/screenshots/skins/dark.png) | ![Midnight Blue](docs/screenshots/skins/midnight.png) | ![High Contrast](docs/screenshots/skins/contrast.png) |
 
 ## Quick start
 
@@ -81,7 +94,7 @@ pip install -r requirements-dev.txt
 python scripts/build_exe.py     # -> dist/File-Renaming-Assistant.exe
 ```
 
-Pushing a tag such as `v1.0` triggers
+Pushing a tag such as `v2.0` triggers
 [`.github/workflows/release.yml`](.github/workflows/release.yml), which builds
 the Windows executable and publishes it to the Release page.
 

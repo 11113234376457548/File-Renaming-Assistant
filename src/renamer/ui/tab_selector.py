@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..theme import TAB_TINTS, Theme
+from ..theme import TAB_TINTS, Theme, is_dark_palette
 
 __all__ = ["TabSelector"]
 
@@ -70,7 +70,9 @@ class TabSelector(QWidget):
         self._restyle()
 
     def _restyle(self) -> None:
-        dark = self._theme["bg_base"] == Theme.DARK["bg_base"]
+        # 按底色亮度判断明暗，而不是比对某个固定的色值 —— 后者每加一套皮肤
+        # 都要再登记一次，漏登记时不会报错，只会让页签在深色皮肤上变成「白底白字」。
+        dark = is_dark_palette(self._theme)
         for i, (btn, color) in enumerate(zip(self._btns, self._colors, strict=True)):
             tint_light, tint_dark = TAB_TINTS.get(color, ("#eef1f3", "#33404a"))
             tint = tint_dark if dark else tint_light

@@ -23,6 +23,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6.QtGui import QFont, QFontDatabase  # noqa: E402
 from PySide6.QtWidgets import QApplication  # noqa: E402
 
+from renamer import settings  # noqa: E402
+from renamer.theme import Theme  # noqa: E402
 from renamer.ui.main_window import MainWindow, fix_palette  # noqa: E402
 
 # 无头渲染时系统字体回退可能找不到中文字形，这里显式加载常见中文字体。
@@ -82,9 +84,14 @@ def build_samples(folder: str) -> list[str]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="生成界面截图")
     parser.add_argument("--out", default=os.path.join(ROOT, "docs", "screenshots"))
-    parser.add_argument("--theme", default="light", choices=["light", "dark"])
+    parser.add_argument("--theme", default=Theme.DEFAULT,
+                        choices=Theme.keys(),
+                        help="皮肤名（默认 %(default)s）")
     parser.add_argument("--width", type=int, default=1160)
     parser.add_argument("--height", type=int, default=730)
+    parser.add_argument("--gallery", action="store_true",
+                        help="给每套皮肤各截一张（第一页），输出 <out>/<皮肤名>.png，"
+                             "用于 README 里的皮肤一览")
     args = parser.parse_args()
     os.makedirs(args.out, exist_ok=True)
 
@@ -95,15 +102,20 @@ def main() -> int:
         print(f"[info] 使用中文字体：{family}")
     else:
         print("[warn] 未找到中文字体，截图中文字可能显示为方块")
+    # 截图必须可复现，也不该动开发者本机存下的皮肤：把配置目录指到临时位置。
+    os.environ[settings.ENV_OVERRIDE] = os.path.join(
+        tempfile.gettempdir(), "file-renaming-assistant-screenshot-cfg")
     fix_palette(app, args.theme)
 
     with tempfile.TemporaryDirectory() as tmp:
         window = MainWindow()
-        if args.theme == "dark":
-            window.toggle_theme()
+        window.set_skin(args.theme)
         window.resize(args.width, args.height)
         window.show()
         window._add_paths(build_samples(tmp))
+
+        if args.gallery:
+            return _shoot_gallery(window, app, args.out)
 
         for index, filename in TAB_FILES.items():
             window.tabsel.setCurrentIndex(index)
@@ -115,6 +127,21 @@ def main() -> int:
             print(f"{'[OK] ' if ok else '[FAIL]'} {target}")
 
     return 0
+
+
+def _shoot_gallery(window, app, out_dir: str) -> int:
+    """每套皮肤截一张第一页，文件名就是皮肤键（``eye.png`` / ``midnight.png`` …）。"""
+    failed = 0
+    for key in Theme.keys():
+        window.set_skin(key)
+        window.tabsel.setCurrentIndex(0)
+        window.preview()
+        app.processEvents()
+        target = os.path.join(out_dir, f"{key}.png")
+        ok = window.grab().save(target)
+        failed += not ok
+        print(f"{'[OK] ' if ok else '[FAIL]'} {target}  ({Theme.name(key)})")
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

@@ -13,6 +13,7 @@ from functools import partial
 from PySide6.QtCore import QSize, Qt, QThread, QUrl, Signal
 from PySide6.QtGui import (
     QAction,
+    QActionGroup,
     QColor,
     QDesktopServices,
     QIcon,
@@ -67,6 +68,7 @@ from ..icons import (
     ICON_CLEAR,
     ICON_EXECUTE,
     ICON_MORE,
+    ICON_PALETTE,
     ICON_PREVIEW,
     ICON_REFRESH,
     ICON_THEME,
@@ -77,6 +79,7 @@ from ..icons import (
     theme_icon_dir,
 )
 from ..paths import resource_path
+from ..settings import get_skin, set_skin
 from ..theme import TAB_COLORS, Theme, build_qss
 from ..update import RELEASES_PAGE, Release, UpdateError, check_latest, is_newer
 from .file_table import (
@@ -134,6 +137,10 @@ def fix_palette(app: QApplication, mode: str = "light") -> None:
     ``QMessageBox`` 等独立顶层窗口不继承主窗口样式表；在 Windows 深色模式下
     会取系统深色背景，而通用 ``QWidget`` 规则又强加了深色文字，形成黑底黑字。
     这里把调色板显式钉死，保证即便样式表未命中也能看清。
+
+    注意：输入框的**占位提示色不归这里管**。实测只要控件带了样式表、且样式表里
+    写了 ``color``，``QStyleSheetStyle`` 就会盖掉 ``PlaceholderText`` 角色，
+    所以在 ``theme.build_qss`` 里用 ``placeholder-text-color`` 属性解决。
     """
     t = Theme.get(mode)
     pal = app.palette()
@@ -231,11 +238,16 @@ class MainWindow(QMainWindow):
         # 每个文件项：[绝对路径, 原文件名, 新文件名, 状态, 是否勾选]
         self.files: list[list] = []
         self.history: list[tuple[str, str]] = []
-        self._mode = "light"
-        self._theme: dict[str, str] = Theme.get("light")
+        # 皮肤名从配置文件恢复。这里**不做校验**：Theme.get 对未知值自带回退，
+        # 在 __init__ 里再查一遍只会让「配置坏了」这件小事多出一处分支。
+        self._skin: str = get_skin()
+        self._theme: dict[str, str] = Theme.get(self._skin)
         # (动作/按钮, Lucide 图标名) —— 主题切换时要按新配色重新着色
         self._menu_icons: list[tuple[QAction, str]] = []
         self._toolbar_icons: list[tuple[QPushButton, str, str]] = []
+        # 「视图 → 皮肤」下的勾选项：皮肤键 -> 动作
+        self._skin_actions: dict[str, QAction] = {}
+        self._skin_menu: QMenu | None = None
         # 检查更新的后台线程；持有引用，避免线程跑着跑着被回收
         self._update_worker: _UpdateWorker | None = None
         # 行拖动开始时的顺序快照；拖动中按 ESC 取消时用它还原
@@ -278,6 +290,8 @@ class MainWindow(QMainWindow):
                      ICON_UNDO)
 
         m_view = bar.addMenu("视图")
+        self._build_skin_menu(m_view)
+        m_view.addSeparator()
         self._action(m_view, "切换深色 / 浅色", self.toggle_theme, "Ctrl+D",
                      ICON_THEME)
 
@@ -297,6 +311,27 @@ class MainWindow(QMainWindow):
         if icon_name:
             self._menu_icons.append((act, icon_name))
         return act
+
+    def _build_skin_menu(self, parent: QMenu) -> None:
+        """在「视图」下挂一个「皮肤」子菜单，当前皮肤带勾。
+
+        用 ``QActionGroup`` 而不是普通 ``QCheckBox`` 式的勾选动作：分组自带互斥，
+        点新的一项时旧项会自动取消，不需要手写「取消兄弟项」的逻辑，也就不存在
+        「两套皮肤同时打勾」的中间态。
+        """
+        menu = parent.addMenu("皮肤")
+        self._skin_menu = menu
+
+        group = QActionGroup(self)
+        group.setExclusive(True)
+        for key in Theme.keys():
+            act = QAction(Theme.name(key), self)
+            act.setCheckable(True)
+            act.setChecked(key == self._skin)
+            act.triggered.connect(lambda _checked=False, k=key: self.set_skin(k))
+            group.addAction(act)
+            menu.addAction(act)
+            self._skin_actions[key] = act
 
     # ------------------------------------------------------------ 界面
 
@@ -879,19 +914,19 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------ 主题
 
     def _apply_theme(self) -> None:
-        self._theme = Theme.get(self._mode)
+        self._theme = Theme.get(self._skin)
         app = QApplication.instance()
         if app is not None:
-            fix_palette(app, self._mode)
+            fix_palette(app, self._skin)
         # QSS 的位图图标按主题着色后落到缓存目录里，再交给样式表
-        self.setStyleSheet(build_qss(self._theme, theme_icon_dir(self._mode)))
+        self.setStyleSheet(build_qss(self._theme, theme_icon_dir(self._skin)))
         self.table.indicator_color = self._theme["accent"]
         self._paint_icons()
         self.tabsel.set_theme(self._theme)
         self._restyle_status()
 
     def _paint_icons(self) -> None:
-        """按当前主题色给菜单项与工具栏按钮重新着色 Lucide 图标。"""
+        """按当前主题色给菜单项、子菜单与工具栏按钮重新着色 Lucide 图标。"""
         t = self._theme
         for act, name in self._menu_icons:
             act.setIcon(icon(name, t["text_primary"]))
@@ -900,6 +935,10 @@ class MainWindow(QMainWindow):
                              TOOL_ICON_SIZE))
         if getattr(self, "fmt_more_btn", None) is not None:
             self.fmt_more_btn.setIcon(icon(ICON_MORE, t["accent"], 11))
+        if self._skin_menu is not None:
+            # QMenu 自己没有 setIcon，子菜单标题的图标只能改它的 menuAction
+            self._skin_menu.menuAction().setIcon(
+                icon(ICON_PALETTE, t["text_primary"]))
 
     def _restyle_status(self) -> None:
         if not hasattr(self, "table") or self.table.rowCount() == 0:
@@ -910,11 +949,25 @@ class MainWindow(QMainWindow):
                 item.setForeground(QColor(self._theme[STATUS_COLORS.get(
                     item.text(), "text_primary")]))
 
-    def toggle_theme(self) -> None:
-        """在浅色 / 深色之间切换。"""
-        self._mode = "dark" if self._mode == "light" else "light"
+    def set_skin(self, key: str) -> None:
+        """切换到 ``key`` 这套皮肤，并把选择写进配置文件。
+
+        切换皮肤只重刷样式表与图标，**不动 ``self.files`` 里的任何数据** ——
+        用户挑皮肤时列表里可能已经排好了预览结果，刷新一下不该把它弄丢。
+        """
+        if not Theme.has(key) or key == self._skin:
+            return
+        self._skin = key
+        for name, act in self._skin_actions.items():
+            act.setChecked(name == key)
         self._apply_theme()
-        self._set_status(f"已切换至{'深色' if self._mode == 'dark' else '浅色'}模式")
+        set_skin(key)
+        self._set_status(f"已切换皮肤：{Theme.name(key)}")
+
+    def toggle_theme(self) -> None:
+        """在「经典浅色 / 经典深色」这一对之间快速切换（Ctrl+D）。"""
+        light, dark = Theme.TOGGLE_PAIR
+        self.set_skin(dark if self._skin != dark else light)
 
     # ------------------------------------------------------------ 数据
 

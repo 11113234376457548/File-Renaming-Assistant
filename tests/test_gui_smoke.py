@@ -91,11 +91,80 @@ def test_settings_cover_all_pages(window):
 
 
 def test_theme_toggle(window):
-    assert window._mode == "light"
+    """Ctrl+D 在「经典浅色 / 经典深色」之间来回切。"""
+    assert window._skin == "light"
     window.toggle_theme()
-    assert window._mode == "dark"
+    assert window._skin == "dark"
     window.toggle_theme()
-    assert window._mode == "light"
+    assert window._skin == "light"
+
+
+def test_skin_menu_lists_every_skin_with_current_checked(window):
+    """「视图 → 皮肤」要列全所有皮肤，且只有当前那套带勾。"""
+    from renamer.theme import Theme
+
+    assert set(window._skin_actions) == set(Theme.keys())
+    for key, act in window._skin_actions.items():
+        assert act.text() == Theme.name(key)
+        assert act.isChecked() is (key == window._skin)
+
+
+def test_switch_skin_applies_and_remembers(window):
+    """点菜单换皮肤：界面真的换了，选择也落到了配置文件里。"""
+    from renamer.settings import get_skin
+    from renamer.theme import Theme
+
+    window.set_skin("midnight")
+
+    assert window._skin == "midnight"
+    assert window._skin_actions["midnight"].isChecked()
+    assert not window._skin_actions["light"].isChecked()
+    assert Theme.get("midnight")["bg_base"] in window.styleSheet()
+    assert get_skin() == "midnight"
+
+
+def test_switch_skin_keeps_file_list(window, tmp_path):
+    """换皮肤只该重刷样式，不能把已经排好的列表数据弄丢。"""
+    _seed(tmp_path, "a.jpg", "b.jpg")
+    window._add_paths([str(tmp_path)])
+    before = [row[:] for row in window.files]
+    assert before
+
+    window.set_skin("eye")
+
+    assert window.files == before
+
+
+def test_qss_placeholder_colour_is_actually_honoured(app):
+    """``placeholder-text-color`` 必须真的被 Qt 采纳，而不只是「写在样式表里」。
+
+    这条 QSS 属性是较新的 Qt 才支持的，更早的版本会静默忽略、只往 stderr
+    抱怨一句，界面照旧是糊的。所以这里换一个颜色渲染两遍做对照 —— 只要渲染
+    结果不同，就说明这条属性确实生效了。
+    """
+    from PySide6.QtWidgets import QLineEdit
+
+    from renamer import icons
+    from renamer.theme import Theme, build_qss
+
+    theme = Theme.get("midnight")
+    icon_dir = icons.theme_icon_dir("midnight")
+    rendered = []
+
+    for colour in (theme["text_muted"], "#ff00ff"):
+        edit = QLineEdit()
+        edit.setPlaceholderText("选择文件夹，或拖拽文件到右侧列表...")
+        edit.setStyleSheet(build_qss(dict(theme, text_muted=colour), icon_dir))
+        edit.resize(320, 30)
+        edit.show()
+        app.processEvents()
+        image = edit.grab().toImage()
+        rendered.append({image.pixelColor(x, y).name()
+                         for y in range(image.height())
+                         for x in range(image.width())})
+        edit.close()
+
+    assert rendered[0] != rendered[1]
 
 
 def test_conditional_rows_follow_checkboxes(window):

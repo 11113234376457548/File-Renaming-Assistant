@@ -41,6 +41,7 @@ ICONS = [
     "square-check", "square-x", "folder-open", "file-plus",
     "refresh-cw", "trash-2", "eye", "circle-check", "undo-2",
     "sun-moon", "info", "file-pen-line", "cloud-download",
+    "palette",
 ]
 
 

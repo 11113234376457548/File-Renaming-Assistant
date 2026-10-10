@@ -3,6 +3,49 @@
 本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)，
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## [2.0] - 2026-10-10
+
+### 新增
+
+- **皮肤（主题）功能**：内置 6 套配色 —— 经典浅色、护眼绿、暖沙、经典深色、
+  暗夜蓝、高对比。入口在「视图 → 皮肤」，当前皮肤带勾；`Ctrl+D` 仍可在
+  经典浅色 / 经典深色之间快速切换。配色集中在 `src/renamer/theme.py` 的
+  `Theme.SKINS` 注册表里，每套都是一个色键完全一致的色值字典，因此
+  样式表生成与图标缓存逻辑对新增皮肤无需任何改动。
+- **记住皮肤选择**：写入用户配置文件（Windows 为
+  `%APPDATA%/File-Renaming-Assistant/settings.json`，macOS / Linux 各自惯例目录），
+  下次启动自动恢复。这是项目引入的第一处配置持久化，采用原子写入。
+- `scripts/screenshot.py --gallery`：为每套皮肤各截一张图，用来生成 README 的皮肤一览。
+
+### 变更
+
+- 每套皮肤都补齐了 `success_hover` / `success_pressed` 两个色键。原先「执行修改」
+  按钮的悬停 / 按下态颜色是硬编码在 `build_qss` 里的，换皮肤时只有这两个状态不跟着变。
+- 页签选择器判断明暗改为按**底色亮度**计算，不再比对固定的 `bg_base` 取值 ——
+  后者每加一套皮肤都要再登记一次，漏登记不会报错，只会让页签在深色皮肤上变成
+  「白底白字」。
+
+### 修复
+
+- **深色皮肤下输入框的占位提示看不清**：Qt 默认拿正文色做三分之一透明来推导占位
+  文字色，深色底上只有约 2.5:1（经典深色 2.60、暗夜蓝 2.56）。改用 QSS 的
+  `placeholder-text-color` 显式指定为 `text_muted`，提升到约 3.4:1。
+  实测确认调色板的 `PlaceholderText` 角色在这里**是无效的**：
+  只要控件带样式表且写了 `color`，`QStyleSheetStyle` 就会盖掉该角色。
+- **「检查更新」在仓库没有发布过版本时误报**：GitHub 对「仓库不存在」和
+  「仓库存在但没有任何 Release」都返回 404，`check_latest()` 一律按「仓库
+  不存在」提示，于是自己没发过版时会看到一句莫名的仓库名。现在 404 后会再
+  探测一次仓库本身：能拿到元数据说明仓库在、只是没发过版本（返回「已是最新」），
+  连仓库都拿不到才提示仓库不存在。探测遇到网络错误时按「仓库存在」处理，
+  避免网络抖动被误读成配置写错。
+
+### 测试
+
+- 测试总数增至 **258** 项：新增 `tests/test_theme.py`、`tests/test_settings.py`，
+  覆盖色键一致性、明暗判定、QSS 渲染完整性、文字对比度、配置读写与容错。
+- `tests/conftest.py` 增加 autouse fixture，把用户配置目录指到临时目录，
+  避免测试污染开发机上的真实设置。
+
 ## [1.0] - 2026-10-09
 
 首个公开版本，以 MIT 协议开源。
@@ -118,4 +161,5 @@
 由第三方发布的闭源 PyInstaller 程序（PyQt6），无公开源码。
 本仓库在实测复现其行为的基础上重建逻辑，并逐条修复缺陷。
 
+[2.0]: https://github.com/11113234376457548/File-Renaming-Assistant/releases/tag/v2.0
 [1.0]: https://github.com/11113234376457548/File-Renaming-Assistant/releases/tag/v1.0

@@ -38,6 +38,7 @@ a = Analysis(
         "renamer.core",
         "renamer.icons",
         "renamer.theme",
+        "renamer.settings",
         "renamer.update",
         "renamer.paths",
         "renamer.ui.main_window",

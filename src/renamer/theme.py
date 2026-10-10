@@ -1,5 +1,9 @@
 """配色与样式表。
 
+项目内置多套「皮肤」，每一套都是 :class:`Theme` 里一个**键完全相同**的色值
+字典，由 :func:`build_qss` 铺成完整样式表。下面这张表是 ``LIGHT``（经典浅色）
+的取值，也是其余皮肤的对照基准：
+
 色值全部取自原版 v4.0 界面的实际像素采样，因此与用户手上的截图保持一致：
 
 ======================  ==========  ========================================
@@ -24,11 +28,38 @@
 
 from __future__ import annotations
 
-__all__ = ["Theme", "TAB_COLORS", "TAB_TINTS", "build_qss"]
+__all__ = ["Theme", "TAB_COLORS", "TAB_TINTS", "build_qss", "is_dark_palette"]
+
+
+def _luminance(hex_color: str) -> float:
+    """返回 ``#rrggbb`` 的相对亮度（0=黑，1=白），用 sRGB 转线性后的加权和。"""
+    value = hex_color.lstrip("#")
+    channels = []
+    for i in (0, 2, 4):
+        raw = int(value[i:i + 2], 16) / 255.0
+        channels.append(raw / 12.92 if raw <= 0.04045
+                        else ((raw + 0.055) / 1.055) ** 2.4)
+    red, green, blue = channels
+    return 0.2126 * red + 0.7152 * green + 0.0722 * blue
+
+
+def is_dark_palette(t: dict[str, str]) -> bool:
+    """按底色亮度判断这套配色是深色还是浅色。
+
+    不用「颜色 == Theme.DARK 的某个值」这类比较来判断 —— 那种写法每加一套
+    皮肤就得再登记一次，漏登记时不会报错，只会让页签在深色皮肤上用浅色底，
+    白底白字。按亮度算则是自洽的：新皮肤不需要做任何额外声明。
+    """
+    return _luminance(t["bg_base"]) < 0.5
 
 
 class Theme:
-    """浅色 / 深色两套配色。"""
+    """内置皮肤（调色板）注册表。
+
+    每套皮肤都是一个**键完全相同**的色值字典，因此 :func:`build_qss` 与
+    :func:`renamer.icons.theme_icon_dir` 对任何一套都能直接工作，不需要分支。
+    色键集合由 ``tests/test_theme.py`` 钉死，新增皮肤时若漏键会立刻测出来。
+    """
 
     LIGHT: dict[str, str] = dict(
         # 底色层次
@@ -53,6 +84,8 @@ class Theme:
         accent_hover="#4a7de0",
         accent_pressed="#3a6dd0",
         success="#58aa82",
+        success_hover="#4a9c76",
+        success_pressed="#3e8a68",
         warning="#d4a843",
         error="#e05454",
         info="#42a5f5",
@@ -93,6 +126,8 @@ class Theme:
         accent_hover="#6d9bf2",
         accent_pressed="#4a7de0",
         success="#58aa82",
+        success_hover="#6cbd95",
+        success_pressed="#4a9c76",
         warning="#d4a843",
         error="#e05454",
         info="#42a5f5",
@@ -111,10 +146,222 @@ class Theme:
         status_text="#a6a6a6",
     )
 
+    #: 护眼绿 —— 底色带一点豆沙绿，长时间盯着不刺眼。
+    #: 仍沿用原版那条规矩：输入框与底色同为 ``bg_base``，只靠描边区分。
+    EYE: dict[str, str] = dict(
+        bg_base="#e8f0e0",
+        bg_panel="#e8f0e0",
+        bg_surface="#f7faf3",
+        bg_elevated="#ffffff",
+        bg_hover="#dde9d3",
+        bg_pressed="#d0e0c4",
+        bg_input="#e8f0e0",
+        bg_spin="#dce7d2",
+        border="#b5c9a8",
+        border_light="#c9d8bf",
+        border_focus="#2f7d49",
+        text_primary="#26311f",
+        text_secondary="#5b6b52",
+        text_muted="#8b9a83",
+        accent="#2f7d49",
+        accent_hover="#276a3d",
+        accent_pressed="#1f5732",
+        success="#2f7d49",
+        success_hover="#276a3d",
+        success_pressed="#1f5732",
+        warning="#9a7412",
+        error="#b23c3c",
+        info="#2f6f95",
+        table_header="#dce7d2",
+        table_bg="#f7faf3",
+        table_row_alt="#f0f5ea",
+        table_grid="#dbe5d3",
+        table_selection="#cfe0c2",
+        tab_active_bg="#cfe0c2",
+        tab_idle_bg="#f7faf3",
+        scrollbar_bg="#e0eadd",
+        scrollbar_handle="#9db28f",
+        scrollbar_hover="#8aa07c",
+        separator="#cfe0c6",
+        status_bg="#e8f0e0",
+        status_text="#5b6b52",
+    )
+
+    #: 暖沙 —— 米黄纸感底色 + 陶土红强调色，偏「纸质文档」的观感。
+    SAND: dict[str, str] = dict(
+        bg_base="#f2ece1",
+        bg_panel="#f2ece1",
+        bg_surface="#fffaf2",
+        bg_elevated="#ffffff",
+        bg_hover="#e8e0d2",
+        bg_pressed="#dcd2c1",
+        bg_input="#f2ece1",
+        bg_spin="#e8e0d2",
+        border="#d3c6b1",
+        border_light="#e0d6c6",
+        border_focus="#b4532a",
+        text_primary="#3a3128",
+        text_secondary="#6f6355",
+        text_muted="#9c9083",
+        accent="#b4532a",
+        accent_hover="#9d4723",
+        accent_pressed="#863c1d",
+        success="#5f8a3f",
+        success_hover="#527a35",
+        success_pressed="#456a2c",
+        warning="#a8821f",
+        error="#b8503f",
+        info="#3f7796",
+        table_header="#e8e0d2",
+        table_bg="#fffaf2",
+        table_row_alt="#f8f3ea",
+        table_grid="#e6dccd",
+        table_selection="#f0e2ce",
+        tab_active_bg="#f0e2ce",
+        tab_idle_bg="#fffaf2",
+        scrollbar_bg="#ebe3d6",
+        scrollbar_handle="#b8a88f",
+        scrollbar_hover="#a3937a",
+        separator="#ded3c2",
+        status_bg="#f2ece1",
+        status_text="#6f6355",
+    )
+
+    #: 暗夜蓝 —— 深色但不是纯灰，底色偏靛蓝，夜里看比 DEFAULT_DARK 柔和。
+    MIDNIGHT: dict[str, str] = dict(
+        bg_base="#161b26",
+        bg_panel="#161b26",
+        bg_surface="#1e2534",
+        bg_elevated="#1e2534",
+        bg_hover="#2a3346",
+        bg_pressed="#354159",
+        bg_input="#1a2030",
+        bg_spin="#252d3f",
+        border="#2f3a4f",
+        border_light="#3c4a63",
+        border_focus="#5b8def",
+        text_primary="#dce4f2",
+        text_secondary="#93a1bb",
+        text_muted="#68758d",
+        accent="#5b8def",
+        accent_hover="#6d9bf2",
+        accent_pressed="#4a7de0",
+        success="#4fae86",
+        success_hover="#5cbf95",
+        success_pressed="#439a75",
+        warning="#d4a843",
+        error="#e06060",
+        info="#4aa8f0",
+        table_header="#242c3d",
+        table_bg="#1b2231",
+        table_row_alt="#1f2735",
+        table_grid="#2c3648",
+        table_selection="#2b3f63",
+        tab_active_bg="#2b3f63",
+        tab_idle_bg="#1e2534",
+        scrollbar_bg="#1d2432",
+        scrollbar_handle="#3a4661",
+        scrollbar_hover="#48566f",
+        separator="#2b3446",
+        status_bg="#161b26",
+        status_text="#93a1bb",
+    )
+
+    #: 高对比 —— 纯黑白 + 全黑描边，给视力不佳或强光环境用。
+    #: 边框刻意压到 ``#000000``，弱化一切「装饰性」的灰阶。
+    CONTRAST: dict[str, str] = dict(
+        bg_base="#ffffff",
+        bg_panel="#ffffff",
+        bg_surface="#ffffff",
+        bg_elevated="#ffffff",
+        bg_hover="#e6e6e6",
+        bg_pressed="#cccccc",
+        bg_input="#ffffff",
+        bg_spin="#e0e0e0",
+        border="#000000",
+        border_light="#4d4d4d",
+        border_focus="#0000cc",
+        text_primary="#000000",
+        text_secondary="#1a1a1a",
+        text_muted="#4d4d4d",
+        accent="#0000cc",
+        accent_hover="#0000a3",
+        accent_pressed="#000080",
+        success="#006600",
+        success_hover="#005500",
+        success_pressed="#004400",
+        warning="#8a5a00",
+        error="#c00000",
+        info="#00557f",
+        table_header="#e6e6e6",
+        table_bg="#ffffff",
+        table_row_alt="#f2f2f2",
+        table_grid="#000000",
+        table_selection="#cfe0ff",
+        tab_active_bg="#cfe0ff",
+        tab_idle_bg="#ffffff",
+        scrollbar_bg="#e6e6e6",
+        scrollbar_handle="#5a5a5a",
+        scrollbar_hover="#303030",
+        separator="#000000",
+        status_bg="#ffffff",
+        status_text="#1a1a1a",
+    )
+
+    #: 皮肤注册表。键就是写进 ``settings.json`` 的名字，**改名等于让老配置失效**
+    #: （读不出来会静默回退默认皮肤），要改就得同时写迁移逻辑。
+    SKINS: dict[str, dict[str, str]] = {
+        "light": LIGHT,
+        "dark": DARK,
+        "eye": EYE,
+        "sand": SAND,
+        "midnight": MIDNIGHT,
+        "contrast": CONTRAST,
+    }
+
+    #: 菜单里的显示名
+    NAMES: dict[str, str] = {
+        "light": "经典浅色",
+        "dark": "经典深色",
+        "eye": "护眼绿",
+        "sand": "暖沙",
+        "midnight": "暗夜蓝",
+        "contrast": "高对比",
+    }
+
+    #: 「视图 → 皮肤」菜单里的排列顺序：浅色系在前，深色系在后
+    ORDER: list[str] = ["light", "eye", "sand", "dark", "midnight", "contrast"]
+
+    #: 默认皮肤
+    DEFAULT: str = "light"
+
+    #: Ctrl+D 快速切换的一对皮肤
+    TOGGLE_PAIR: tuple[str, str] = ("light", "dark")
+
     @classmethod
-    def get(cls, mode: str = "light") -> dict[str, str]:
-        """返回配色副本；``mode='dark'`` 时返回深色。"""
-        return dict(cls.DARK if mode == "dark" else cls.LIGHT)
+    def keys(cls) -> list[str]:
+        """按菜单顺序返回全部皮肤键。"""
+        return list(cls.ORDER)
+
+    @classmethod
+    def has(cls, key: str) -> bool:
+        """``key`` 是否是一套已登记的皮肤。"""
+        return key in cls.SKINS
+
+    @classmethod
+    def get(cls, key: str = DEFAULT) -> dict[str, str]:
+        """返回配色副本；未知键回退到默认皮肤。"""
+        return dict(cls.SKINS.get(key) or cls.SKINS[cls.DEFAULT])
+
+    @classmethod
+    def name(cls, key: str) -> str:
+        """返回皮肤显示名；未知键回退到默认皮肤的名字。"""
+        return cls.NAMES.get(key) or cls.NAMES[cls.DEFAULT]
+
+    @classmethod
+    def is_dark(cls, key: str) -> bool:
+        """这套皮肤是不是深色系。"""
+        return is_dark_palette(cls.get(key))
 
 
 #: 八个功能页的强调色（与原版 v4.0 一致）
@@ -232,8 +479,12 @@ QPushButton#btnExecute {{
     background: {t['success']}; color: #ffffff; border: 1px solid {t['success']};
     font-weight: bold; padding: 2px 18px; border-radius: 5px;
 }}
-QPushButton#btnExecute:hover {{ background: #4a9c76; border-color: #4a9c76; }}
-QPushButton#btnExecute:pressed {{ background: #3e8a68; border-color: #3e8a68; }}
+QPushButton#btnExecute:hover {{
+    background: {t['success_hover']}; border-color: {t['success_hover']};
+}}
+QPushButton#btnExecute:pressed {{
+    background: {t['success_pressed']}; border-color: {t['success_pressed']};
+}}
 
 /* 输入框右侧的「格式预设」下拉按钮 */
 QToolButton#fmtMore {{
@@ -278,6 +529,12 @@ QLineEdit, QSpinBox, QComboBox, QPlainTextEdit, QTextEdit {{
     font-size: 13px; min-height: 22px;
     selection-background-color: {t['accent']};
     selection-color: #ffffff;
+    /* 必须显式指定：不给的话 Qt 会拿 color 做三分之一透明来推导占位文字色，
+       深色皮肤上只剩约 2.5:1，输入框里那句提示基本看不清。
+       注意**调色板里的 PlaceholderText 角色在这里是无效的** —— 只要控件带了
+       样式表、且样式表里写了 color，QStyleSheetStyle 就会盖掉那个角色，
+       实测验证过；唯一管用的是这条 QSS 属性。 */
+    placeholder-text-color: {t['text_muted']};
     outline: none;
 }}
 QLineEdit:focus, QSpinBox:focus, QComboBox:focus, QPlainTextEdit:focus {{
